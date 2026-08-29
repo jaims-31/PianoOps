@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PianOps</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/vexflow@5.0.0/build/cjs/vexflow-core.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🎹 PianOps</h1>
+    <p>Entraîne-toi à lire les notes sur une partition</p>
+  </header>
+
+  <main>
+    <section id="controls">
+      <label for="clef-select">Clé :</label>
+      <select id="clef-select">
+        <option value="treble">Sol</option>
+        <option value="bass">Fa</option>
+      </select>
+
+      <label for="difficulty-select">Difficulté :</label>
+      <select id="difficulty-select">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+    </section>
+
+    <section id="staff-section">
+      <div id="staff"></div>
+    </section>
+
+    <section id="answers"></section>
+
+    <p id="feedback"></p>
+
+    <section id="stats">
+      <h2>Statistiques</h2>
+      <div id="stats-content">Chargement...</div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
