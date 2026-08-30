@@ -13,16 +13,18 @@ Base = declarative_base()
 
 
 def wait_for_db(retries: int = 10, delay: float = 1.5) -> None:
-    
+
     last_error: Exception | None = None
     for _ in range(retries):
         try:
             with engine.connect():
                 return
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - retry loop needs to catch any connection error
             last_error = exc
             time.sleep(delay)
-    raise RuntimeError(f"Impossible de se connecter à la base après {retries} tentatives") from last_error
+    raise RuntimeError(
+        f"Impossible de se connecter à la base après {retries} tentatives"
+    ) from last_error
 
 
 def get_db():

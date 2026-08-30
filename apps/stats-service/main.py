@@ -1,13 +1,11 @@
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from typing import Optional
-
-from fastapi import Depends, FastAPI
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy.orm import Session
 
 from database import Base, engine, get_db, wait_for_db
+from fastapi import Depends, FastAPI
 from models import Answer
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
 
 
 @asynccontextmanager
@@ -27,7 +25,7 @@ class AnswerIn(BaseModel):
     note_letter: str
     given_answer: str
     correct: bool
-    response_time_ms: Optional[int] = None
+    response_time_ms: int | None = None
 
 
 class AnswerOut(AnswerIn):
@@ -56,7 +54,9 @@ def stats_summary(db: Session = Depends(get_db)):
     total = len(answers)
     correct_count = sum(1 for a in answers if a.correct)
 
-    by_letter: dict[str, dict[str, int]] = defaultdict(lambda: {"total": 0, "correct": 0})
+    by_letter: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"total": 0, "correct": 0}
+    )
     for a in answers:
         by_letter[a.note_letter]["total"] += 1
         if a.correct:

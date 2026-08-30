@@ -44,7 +44,9 @@ async def proxy(request: Request, target_base: str, path: str) -> Response:
         url=url,
         params=request.query_params,
         content=body,
-        headers={"content-type": request.headers.get("content-type", "application/json")},
+        headers={
+            "content-type": request.headers.get("content-type", "application/json")
+        },
     )
 
     return Response(
