@@ -1,0 +1,94 @@
+name: Deploy to AKS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: pianops-deploy
+  cancel-in-progress: false
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_USE_OIDC: true
+
+jobs:
+  deploy:
+    name: Terraform apply + build/push images + deploy to AKS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: infra
+        run: terraform init
+
+      - name: Terraform apply
+        working-directory: infra
+        run: terraform apply -input=false -auto-approve
+
+      - name: Build and push images to ACR
+        run: |
+          for service in stats-service exercises-service api-gateway; do
+            az acr build \
+              --registry acrpianops \
+              --image "${service}:${{ github.sha }}" \
+              --platform linux/amd64 \
+              "apps/${service}"
+          done
+          az acr build \
+            --registry acrpianops \
+            --image "frontend:${{ github.sha }}" \
+            --platform linux/amd64 \
+            "frontend"
+
+      - name: Get AKS credentials
+        run: az aks get-credentials --resource-group rg-pianops --name aks-pianops --overwrite-existing
+
+      - name: Apply namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Sync database credentials secret from Key Vault
+        run: |
+          DB_HOST=$(az postgres flexible-server show --name psql-pianops --resource-group rg-pianops --query fullyQualifiedDomainName -o tsv)
+          DB_PASSWORD=$(az keyvault secret show --vault-name kv-pianops --name postgres-admin-password --query value -o tsv)
+          kubectl create secret generic stats-db-credentials \
+            --namespace pianops \
+            --from-literal=DATABASE_URL="postgresql://pianopsadmin:${DB_PASSWORD}@${DB_HOST}:5432/pianops?sslmode=require" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -f k8s/
+
+      - name: Update image tags
+        run: |
+          kubectl set image deployment/stats-service stats-service=acrpianops.azurecr.io/stats-service:${{ github.sha }} -n pianops
+          kubectl set image deployment/exercises-service exercises-service=acrpianops.azurecr.io/exercises-service:${{ github.sha }} -n pianops
+          kubectl set image deployment/api-gateway api-gateway=acrpianops.azurecr.io/api-gateway:${{ github.sha }} -n pianops
+          kubectl set image deployment/frontend frontend=acrpianops.azurecr.io/frontend:${{ github.sha }} -n pianops
+
+      - name: Wait for rollouts
+        run: |
+          kubectl rollout status deployment/stats-service -n pianops
+          kubectl rollout status deployment/exercises-service -n pianops
+          kubectl rollout status deployment/api-gateway -n pianops
+          kubectl rollout status deployment/frontend -n pianops
