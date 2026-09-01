@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stats-service
+  namespace: pianops
+  labels:
+    app: stats-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stats-service
+  template:
+    metadata:
+      labels:
+        app: stats-service
+    spec:
+      containers:
+        - name: stats-service
+          image: acrpianops.azurecr.io/stats-service:v1
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: stats-db-credentials
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stats-service
+  namespace: pianops
+spec:
+  selector:
+    app: stats-service
+  ports:
+    - port: 8000
+      targetPort: 8000
