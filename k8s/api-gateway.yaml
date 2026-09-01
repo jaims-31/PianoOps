@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: pianops
+  labels:
+    app: api-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: acrpianops.azurecr.io/api-gateway:v1
+          ports:
+            - containerPort: 8000
+          env:
+            - name: EXERCISES_SERVICE_URL
+              value: "http://exercises-service:8000"
+            - name: STATS_SERVICE_URL
+              value: "http://stats-service:8000"
+            - name: ALLOWED_ORIGINS
+              value: "*"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: pianops
+spec:
+  type: LoadBalancer
+  selector:
+    app: api-gateway
+  ports:
+    - port: 80
+      targetPort: 8000
