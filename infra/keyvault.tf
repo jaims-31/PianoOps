@@ -19,3 +19,9 @@ resource "azurerm_role_assignment" "keyvault_secrets_officer" {
   role_definition_name = "Key Vault Secrets Officer"
   principal_id         = data.azurerm_client_config.current.object_id
 }
+
+resource "azurerm_role_assignment" "keyvault_secrets_officer_ci" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = "5b3e5941-6229-4f43-a586-5955a2665b68"
+}
