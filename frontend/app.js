@@ -1,4 +1,4 @@
-const API_BASE = "http://172.160.77.53";
+const API_BASE = window.API_BASE;
 
 let currentExercise = null;
 let questionStartedAt = null;

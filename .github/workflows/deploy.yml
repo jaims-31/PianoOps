@@ -76,19 +76,67 @@ jobs:
             --from-literal=DATABASE_URL="postgresql://pianopsadmin:${DB_PASSWORD}@${DB_HOST}:5432/pianops?sslmode=require" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Apply Kubernetes manifests
-        run: kubectl apply -f k8s/
-
-      - name: Update image tags
+      - name: Deploy backend services and api-gateway
         run: |
+          kubectl apply -f k8s/stats-service.yaml
+          kubectl apply -f k8s/exercises-service.yaml
+          kubectl apply -f k8s/api-gateway.yaml
           kubectl set image deployment/stats-service stats-service=acrpianops.azurecr.io/stats-service:${{ github.sha }} -n pianops
           kubectl set image deployment/exercises-service exercises-service=acrpianops.azurecr.io/exercises-service:${{ github.sha }} -n pianops
           kubectl set image deployment/api-gateway api-gateway=acrpianops.azurecr.io/api-gateway:${{ github.sha }} -n pianops
-          kubectl set image deployment/frontend frontend=acrpianops.azurecr.io/frontend:${{ github.sha }} -n pianops
-
-      - name: Wait for rollouts
-        run: |
           kubectl rollout status deployment/stats-service -n pianops
           kubectl rollout status deployment/exercises-service -n pianops
           kubectl rollout status deployment/api-gateway -n pianops
+
+      - name: Wait for api-gateway public IP
+        id: gateway_ip
+        run: |
+          for i in $(seq 1 30); do
+            IP=$(kubectl get svc api-gateway -n pianops -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            if [ -n "$IP" ]; then
+              echo "api-gateway IP: $IP"
+              echo "ip=$IP" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for api-gateway public IP"
+          exit 1
+
+      - name: Generate frontend runtime config
+        run: |
+          kubectl create configmap frontend-config \
+            --namespace pianops \
+            --from-literal=config.js="window.API_BASE = \"http://${{ steps.gateway_ip.outputs.ip }}\";" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy frontend
+        run: |
+          kubectl apply -f k8s/frontend.yaml
+          kubectl set image deployment/frontend frontend=acrpianops.azurecr.io/frontend:${{ github.sha }} -n pianops
           kubectl rollout status deployment/frontend -n pianops
+
+      - name: Wait for frontend public IP
+        id: frontend_ip
+        run: |
+          for i in $(seq 1 30); do
+            IP=$(kubectl get svc frontend -n pianops -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            if [ -n "$IP" ]; then
+              echo "frontend IP: $IP"
+              echo "ip=$IP" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for frontend public IP"
+          exit 1
+
+      - name: Restrict api-gateway CORS to the frontend origin
+        run: |
+          kubectl set env deployment/api-gateway ALLOWED_ORIGINS="http://${{ steps.frontend_ip.outputs.ip }}" -n pianops
+          kubectl rollout status deployment/api-gateway -n pianops
+
+      - name: Print deployment URLs
+        run: |
+          echo "Frontend:    http://${{ steps.frontend_ip.outputs.ip }}"
+          echo "API gateway: http://${{ steps.gateway_ip.outputs.ip }}"
