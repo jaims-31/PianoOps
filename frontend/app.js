@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:8080";
+const API_BASE = "http://172.160.77.53";
 
 let currentExercise = null;
 let questionStartedAt = null;
